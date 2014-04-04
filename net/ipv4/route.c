@@ -753,6 +753,7 @@ static void __ip_do_redirect(struct rtable *rt, struct sk_buff *skb, struct flow
 			if (fib_lookup(net, fl4, &res) == 0) {
 				struct fib_nh *nh = &FIB_RES_NH(res);
 
+				net_info_ratelimited("Adding FNHE for redirect: dest=%pI4 gw=%pI4\n", &fl4->daddr, &new_gw);
 				update_or_create_fnhe(nh, fl4->daddr, new_gw,
 						      0, 0);
 			}
@@ -990,6 +991,7 @@ static void ip_rt_update_pmtu(struct dst_entry *dst, struct sock *sk,
 	struct flowi4 fl4;
 
 	ip_rt_build_flow_key(&fl4, sk, skb);
+	net_info_ratelimited("ip_rt_update_pmtu: Adding FNHE for Path MTU: dest=%pI4\n", &fl4.daddr);
 	__ip_rt_update_pmtu(rt, &fl4, mtu);
 }
 
@@ -1007,6 +1009,7 @@ void ipv4_update_pmtu(struct sk_buff *skb, struct net *net, u32 mtu,
 			 RT_TOS(iph->tos), protocol, mark, flow_flags);
 	rt = __ip_route_output_key(net, &fl4);
 	if (!IS_ERR(rt)) {
+		net_info_ratelimited("ipv4_update_pmtu: Adding FNHE for Path MTU: dest=%pI4\n", &fl4.daddr);
 		__ip_rt_update_pmtu(rt, &fl4, mtu);
 		ip_rt_put(rt);
 	}
@@ -1026,6 +1029,7 @@ static void __ipv4_sk_update_pmtu(struct sk_buff *skb, struct sock *sk, u32 mtu)
 
 	rt = __ip_route_output_key(sock_net(sk), &fl4);
 	if (!IS_ERR(rt)) {
+		net_info_ratelimited("__ipv4_sk_update_pmtu: Adding FNHE for Path MTU: dest=%pI4\n", &fl4.daddr);
 		__ip_rt_update_pmtu(rt, &fl4, mtu);
 		ip_rt_put(rt);
 	}
@@ -1062,6 +1066,7 @@ void ipv4_sk_update_pmtu(struct sk_buff *skb, struct sock *sk, u32 mtu)
 		new = true;
 	}
 
+	net_info_ratelimited("ipv4_sk_update_pmtu: Adding FNHE for Path MTU: dest=%pI4\n", &fl4.daddr);
 	__ip_rt_update_pmtu((struct rtable *) rt->dst.path, &fl4, mtu);
 
 	if (!dst_check(&rt->dst, 0)) {
