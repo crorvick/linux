@@ -2578,6 +2578,84 @@ static const struct file_operations fib_route_fops = {
 	.release = seq_release_net,
 };
 
+static int fib_nh_exceptions_seq_show(struct seq_file *seq, void *v)
+{
+	struct leaf *l = v;
+	struct leaf_info *li;
+
+	if (v == SEQ_START_TOKEN) {
+		seq_printf(seq, "%-8s %-16s %-16s %-6s %-6s %-11s %s\n",
+			"Iface",
+			"Destination",
+			"Next Hop",
+			"PMTU",
+			"GenID",
+			"Time",
+			"Expires");
+		return 0;
+	}
+
+	hlist_for_each_entry_rcu(li, &l->list, hlist) {
+		struct fib_alias *fa;
+
+		list_for_each_entry_rcu(fa, &li->falh, fa_list) {
+			const struct fib_info *fi = fa->fa_info;
+			struct fnhe_hash_bucket *hash;
+			struct fib_nh_exception *fnhe;
+			int i, j;
+
+			if (!fi)
+				continue;
+
+			for (i = 0; i < fi->fib_nhs; i++) {
+				hash = fi->fib_nh[i].nh_exceptions;
+				if (!hash)
+					continue;
+
+				for (j = 0; j < FNHE_HASH_SIZE; j++, hash++) {
+					if (!hash->chain)
+						continue;
+
+					for (fnhe = rcu_dereference(hash->chain); fnhe;
+					     fnhe = rcu_dereference(fnhe->fnhe_next)) {
+						seq_printf(seq, "%-8s %-16pI4 %-16pI4 %-6d %-6d %-11ld %ld\n",
+							fi->fib_dev ? fi->fib_dev->name : "*",
+							&fnhe->fnhe_daddr,
+							fnhe->fnhe_gw ? &fnhe->fnhe_gw : &fi->fib_nh[i].nh_gw,
+							fnhe->fnhe_pmtu,
+							fnhe->fnhe_genid,
+							fnhe->fnhe_stamp,
+							fnhe->fnhe_expires);
+					}
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
+static const struct seq_operations fib_nh_exceptions_seq_ops = {
+	.start  = fib_route_seq_start,
+	.next   = fib_route_seq_next,
+	.stop   = fib_route_seq_stop,
+	.show   = fib_nh_exceptions_seq_show,
+};
+
+static int fib_nh_exceptions_seq_open(struct inode *inode, struct file *file)
+{
+	return seq_open_net(inode, file, &fib_nh_exceptions_seq_ops,
+			    sizeof(struct fib_route_iter));
+}
+
+static const struct file_operations fib_nh_exceptions_fops = {
+	.owner  = THIS_MODULE,
+	.open   = fib_nh_exceptions_seq_open,
+	.read   = seq_read,
+	.llseek = seq_lseek,
+	.release = seq_release_net,
+};
+
 int __net_init fib_proc_init(struct net *net)
 {
 	if (!proc_create("fib_trie", S_IRUGO, net->proc_net, &fib_trie_fops))
@@ -2590,8 +2668,13 @@ int __net_init fib_proc_init(struct net *net)
 	if (!proc_create("route", S_IRUGO, net->proc_net, &fib_route_fops))
 		goto out3;
 
+	if (!proc_create("fib_nh_exceptions", S_IRUGO, net->proc_net, &fib_nh_exceptions_fops))
+		goto out4;
+
 	return 0;
 
+out4:
+	remove_proc_entry("route", net->proc_net);
 out3:
 	remove_proc_entry("fib_triestat", net->proc_net);
 out2:
