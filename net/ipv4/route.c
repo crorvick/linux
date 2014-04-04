@@ -606,6 +606,8 @@ static inline u32 fnhe_hashfun(__be32 daddr)
 
 static void fill_route_from_fnhe(struct rtable *rt, struct fib_nh_exception *fnhe)
 {
+	net_info_ratelimited("fill_route_from_fnhe: gw=%pI4 pmtu=%d\n", &fnhe->fnhe_gw, fnhe->fnhe_pmtu);
+
 	rt->rt_pmtu = fnhe->fnhe_pmtu;
 	rt->dst.expires = fnhe->fnhe_expires;
 
